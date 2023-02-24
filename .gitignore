@@ -13,5 +13,5 @@ bin/*
 .sts4-cache/
 .vscode
 _site/
-*.css
+#*.css
 !petclinic.css
