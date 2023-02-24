@@ -1,0 +1,67 @@
+# This workflow will build a Java project with Maven, and cache/restore any dependencies to improve the workflow execution time
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-maven
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Java CI with Maven
+
+on:
+  push:
+    branches: [ "maven" ]
+  pull_request:
+    branches: [ "maven" ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Log in to the GH Container registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUBTOKEN }}
+
+      - uses: buildpacks/github-actions/setup-pack@v5.0.1
+
+      - name: Build and publish
+        run: pack build ${{ env.REGISTRY }}/${{ github.repository }}:maven --builder dmikusa/paketo-base-builder-jammy  --trust-builder  --verbose --clear-cache -e BP_JAVA_INSTALL_NODE=true -e BP_NODE_PROJECT_PATH="frontend" --publish
+
+      - name: Run maven based image and asserts application starts up properly
+        run: |
+          docker run --rm --name=spring-boot-demo-arm64-jvm -d -p 8080:8080 ${{ env.REGISTRY }}/${{ github.repository }}:maven
+          sleep 5
+          docker logs -f spring-boot-demo-arm64-jvm &> container.logs &
+          
+          counter=0
+          while [ $counter -lt 10 ]
+          do
+            response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/actuator/health)
+            if [ $response -eq 200 ]; then
+              echo "HTTP 200 OK, app is started properly"
+              echo "shutting down the app"
+              response=$(curl -X POST -s -o /dev/null -w "%{http_code}" localhost:8080/actuator/shutdown)
+              if [ $response -eq 200 ]; then
+                echo "HTTP 200 OK, app shutting now"
+              fi
+              sleep 1
+              cat container.logs
+              exit 0
+            fi
+            counter=$((counter+1))
+            sleep 1
+          done
+          echo "Request failed: HTTP $response, app was never ready"
+          cat container.logs
+          exit 1
