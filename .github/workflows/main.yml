@@ -40,9 +40,9 @@ jobs:
 
     - name: Run gradle based image and asserts application starts up properly
       run: |
-        docker run --rm --name=spring-boot-demo-arm64-jvm -d -p 8080:8080 ${{ env.REGISTRY }}/${{ github.repository }}:gradle
+        docker run --rm --name=bigjar-gradle-built -d -p 8080:8080 ${{ env.REGISTRY }}/${{ github.repository }}:gradle || docker logs bigjar-gradle-built
         sleep 5
-        docker logs -f spring-boot-demo-arm64-jvm &> container.logs &
+        docker logs -f bigjar-gradle-built &> container.logs &
         
         counter=0
         while [ $counter -lt 10 ]
